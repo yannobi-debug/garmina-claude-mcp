@@ -32,20 +32,80 @@ export class MyMCP extends McpAgent {
 
     this.server.tool(
       "getRecentActivities",
-      { days: z.number().optional().describe("Days back, default 14") },
-      async ({ days = 14 }) => {
-        const oldest = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-        const data = await this.icu(`/athlete/${athlete}/activities?oldest=${oldest}`);
+      {
+        days: z.number().optional().describe("Days back, default 14"),
+        oldest: z.string().optional().describe("Start date YYYY-MM-DD (overrides days), e.g. for the full history"),
+        newest: z.string().optional().describe("End date YYYY-MM-DD, default today"),
+      },
+      async ({ days = 14, oldest: from, newest: to }) => {
+        const oldest = from ?? new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+        const newest = to ?? new Date().toISOString().slice(0, 10);
+        const data = await this.icu(`/athlete/${athlete}/activities?oldest=${oldest}&newest=${newest}`);
         return { content: [{ type: "text", text: JSON.stringify(data) }] };
       },
     );
 
     this.server.tool(
+      "getActivity",
+      { activityId: z.string().describe("Activity ID from getRecentActivities, e.g. 'i123456789'") },
+      async ({ activityId }) => {
+        const data = await this.icu(`/activity/${encodeURIComponent(activityId)}`);
+        return { content: [{ type: "text", text: JSON.stringify(data) }] };
+      },
+    );
+
+    this.server.tool(
+      "getActivityIntervals",
+      { activityId: z.string().describe("Activity ID from getRecentActivities") },
+      async ({ activityId }) => {
+        const data = await this.icu(`/activity/${encodeURIComponent(activityId)}/intervals`);
+        return { content: [{ type: "text", text: JSON.stringify(data) }] };
+      },
+    );
+
+    this.server.tool(
+      "getActivityStreams",
+      {
+        activityId: z.string().describe("Activity ID from getRecentActivities"),
+        types: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Stream types, default time,heartrate,velocity_smooth,altitude,cadence,distance,grade_smooth,latlng",
+          ),
+        every: z
+          .number()
+          .optional()
+          .describe("Keep one sample every N seconds (1 = full second-by-second resolution, default 1)"),
+      },
+      async ({ activityId, types, every = 1 }) => {
+        const t = (
+          types ?? ["time", "heartrate", "velocity_smooth", "altitude", "cadence", "distance", "grade_smooth", "latlng"]
+        ).join(",");
+        const data = await this.icu(`/activity/${encodeURIComponent(activityId)}/streams.json?types=${t}`);
+        const step = Math.max(1, Math.floor(every));
+        const out = Array.isArray(data) && step > 1
+          ? data.map((s: any) => ({
+              ...s,
+              data: Array.isArray(s.data) ? s.data.filter((_: unknown, i: number) => i % step === 0) : s.data,
+              data2: Array.isArray(s.data2) ? s.data2.filter((_: unknown, i: number) => i % step === 0) : s.data2,
+            }))
+          : data;
+        return { content: [{ type: "text", text: JSON.stringify(out) }] };
+      },
+    );
+
+    this.server.tool(
       "getWellness",
-      { days: z.number().optional().describe("Days back, default 7") },
-      async ({ days = 7 }) => {
-        const oldest = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-        const data = await this.icu(`/athlete/${athlete}/wellness?oldest=${oldest}`);
+      {
+        days: z.number().optional().describe("Days back, default 7"),
+        oldest: z.string().optional().describe("Start date YYYY-MM-DD (overrides days), e.g. for the full history"),
+        newest: z.string().optional().describe("End date YYYY-MM-DD, default today"),
+      },
+      async ({ days = 7, oldest: from, newest: to }) => {
+        const oldest = from ?? new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+        const newest = to ?? new Date().toISOString().slice(0, 10);
+        const data = await this.icu(`/athlete/${athlete}/wellness?oldest=${oldest}&newest=${newest}`);
         return { content: [{ type: "text", text: JSON.stringify(data) }] };
       },
     );
