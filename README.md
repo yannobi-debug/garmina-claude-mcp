@@ -1,4 +1,4 @@
-# garmin-claude-mcp
+# garmin-claude-mcp 
 
 Connect your Garmin training data to Claude, and let Claude push structured workouts back to your watch. Free to run. No subscription.
 
